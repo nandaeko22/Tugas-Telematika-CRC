@@ -1,0 +1,313 @@
+package crc;
+
+import java.util.*;
+import java.io.*;
+import java.math.*;
+
+
+public class CRCCalculator {
+
+	private static File userFile;
+	private final static String BINARY_POLYNOMIAL = "10000010110001001";
+
+	public static void main(String[] args) {
+
+		Scanner stdin = new Scanner(System.in);
+
+		String pathname;
+		while (true)
+		{
+			System.out.println("Please enter path/ name for file.");
+			pathname= stdin.next();
+			File tempFile= new File(pathname);
+
+			if (tempFile.exists() == false)
+			{
+				System.out.println("Invalid pathname for file. Try again.");
+				continue;
+			}
+			else
+			{
+				userFile= tempFile;
+
+				if (verifyFile(userFile) == true)
+					break;
+				else
+				{
+					System.out.println("Input is not in hexadecimal format.");
+					continue;
+				}
+			}
+		}
+
+		int userChoice= 0;
+		while (userChoice != 3){
+
+			System.out.println("-------------Menu-------------");
+			System.out.println("1: Calculate CRC");
+			System.out.println("2: Verify CRC");
+			System.out.println("3: Exit");
+
+			try
+			{
+				userChoice = stdin.nextInt();
+			}
+			catch (InputMismatchException e)
+			{
+				System.out.println("Please enter a valid choice.\n");
+				stdin.next();
+				continue;
+			}
+
+			if (userChoice == 1)
+				calculateCRC();
+
+			else if (userChoice == 2)
+				verifyCRC();
+
+			else if (userChoice == 3)
+				System.exit(0);
+
+			else
+			{
+				System.out.println("Please enter a valid choice.\n");
+				continue;
+			}
+
+
+		}
+
+		stdin.close();
+	}
+
+	public static void calculateCRC()
+	{
+		printInit();
+
+		System.out.println("We will append sixteen zeros at the end of the binary input.\n");
+		String inputString= hexToBinary(getInputAsString());
+		inputString = inputString + "0000000000000000";
+
+		System.out.println("The binary string answer at each XOR step of CRC calculation:");
+
+		printBinary(inputString);
+		String printString= inputString;
+
+		for (int i= 0; i< inputString.length(); i++)
+		{
+			if (printString.charAt(i)== '0')
+				continue;
+
+			if ((BINARY_POLYNOMIAL.length() + i + 1 ) > printString.length())
+			{
+				printString= printString.substring(0, i)
+						+ xor(printString.substring(i), BINARY_POLYNOMIAL);
+				printBinary(printString);
+				break;
+			}
+
+			printString= printString.substring(0, i)
+					+ xor(printString.substring(i,(BINARY_POLYNOMIAL.length() +i)), BINARY_POLYNOMIAL)
+					+ inputString.substring((BINARY_POLYNOMIAL.length()+ i));
+			printBinary(printString);
+		}
+
+		printString = reverse(printString);
+		printString = printString.substring(0, 16);
+		printString = reverse(printString);
+
+		System.out.print("Thus, the CRC is: (bin) ");
+		printBinary(printString);
+		System.out.println("which equals "+binaryToHex(printString)+ " (hex)");
+		String input = getInputAsString();
+		System.out.println("Reading input file again: "+ input + binaryToHex(printString));
+
+		try{
+			BufferedWriter userFileWrite = new BufferedWriter(new FileWriter(userFile));
+			userFileWrite.write(input + binaryToHex(printString));
+
+			System.out.println("Closing input file.");
+			userFileWrite.close();
+
+		}	catch (IOException e) {
+			System.out.println("Something went wrong...");
+		}
+
+		return;
+	}
+
+	public static void verifyCRC()
+	{
+		String input = getInputAsString();
+		
+		printInit();
+		
+		if (input.length() < 4)
+		{
+			System.out.println("Error: input too short. Terminating program.");
+			System.exit(1);
+		}
+		
+		String crc= reverse(input);
+		crc= crc.substring(0, 4);
+		crc= reverse(crc);
+		
+		System.out.print("The 16-bit CRC at the end of the file: (hex) "+ crc + "= ");
+		printBinary(hexToBinary(crc));
+		
+		System.out.println("The binary string answer at each XOR step of CRC verification:");
+		printBinary(hexToBinary(input));
+		
+		String binaryInput = hexToBinary(input);
+		String printString = binaryInput;
+		
+		for (int i= 0; i< binaryInput.length() +1; i++)
+		{
+			if (printString.charAt(i)== '0')
+				continue;
+
+			if ((BINARY_POLYNOMIAL.length() + i) > printString.length())
+			{
+				printString= printString.substring(0, i)
+						+ xor(printString.substring(i), BINARY_POLYNOMIAL);
+				printBinary(printString);
+				
+				break;
+			}
+
+			printString= printString.substring(0, i)
+					+ xor(printString.substring(i,(BINARY_POLYNOMIAL.length() +i)), BINARY_POLYNOMIAL)
+					+ binaryInput.substring((BINARY_POLYNOMIAL.length()+ i));
+			printBinary(printString);
+		}
+		
+		boolean crcCheckPass = true;
+		
+		for (int i= 0; i < printString.length(); i++)
+		{
+			if (printString.charAt(i) == '1')
+				crcCheckPass = false;
+		}
+		
+		System.out.print("\nDid the CRC check pass? (Yes or No): ");
+		if (crcCheckPass == true)
+			System.out.println("Yes");
+		else
+			System.out.println("No");
+	}
+
+
+
+	public static void printInit()
+	{
+		System.out.println("The input file (hex): "+
+				getInputAsString());
+
+		System.out.println("The input file (bin): ");
+		printBinary(hexToBinary(getInputAsString()));
+		System.out.println("");
+
+		System.out.print("The polynomial that was used "+
+				"(binary bit string): ");
+		printBinary(BINARY_POLYNOMIAL);
+		System.out.println("");
+	}
+
+	public static String getInputAsString()
+	{
+		String inputString= "";
+		try {
+			Scanner scn = new Scanner(userFile);
+
+			while (scn.hasNext())
+				inputString = inputString + scn.next();
+
+			scn.close();
+
+		}	catch (FileNotFoundException e) {
+			System.out.println("Something went wrong...");
+		}
+
+		return inputString;
+	}
+
+	public static boolean verifyFile(File input)
+	{
+		try {
+			Scanner hexScanner = new Scanner(input);
+			hexScanner.useDelimiter("");
+
+			while (hexScanner.hasNext() == true)
+			{
+				char check = hexScanner.next().toUpperCase().toCharArray()[0];
+				if (check < '0')
+				{
+					hexScanner.close();
+					return false;
+				}
+				else if (check > 'F')
+				{
+					hexScanner.close();
+					return false;
+				}
+				else if (check > '9' && check < 'A')
+				{
+					hexScanner.close();
+					return false;
+				}
+			}
+
+			hexScanner.close();
+
+			return true;
+
+		}	catch (FileNotFoundException e) {
+			System.out.println("Something went wrong...");
+			return false;
+		}
+	}
+
+	public static String hexToBinary(String hexNumber)
+	{
+		BigInteger temp = new BigInteger(hexNumber, 16);
+		return temp.toString(2);
+	}
+
+	public static void printBinary(String binaryNumber)
+	{
+		binaryNumber= binaryNumber.replaceAll(".{32}", "$0\n");
+
+		binaryNumber= reverse(binaryNumber);
+		binaryNumber= binaryNumber.replaceAll(".{4}", "$0 ");
+		binaryNumber= reverse(binaryNumber);
+
+		System.out.print(binaryNumber);
+
+		if (binaryNumber.length() < 32)
+			System.out.println("");
+	}
+
+	public static String reverse(String str) {
+		if (str.length() <= 1) { 
+			return str;
+		}
+		return reverse(str.substring(1, str.length())) + str.charAt(0);
+	}
+
+	public static String binaryToHex (String binaryNumber)
+	{
+		BigInteger temp = new BigInteger(binaryNumber, 2);
+		return temp.toString(16).toUpperCase();
+	}
+
+	public static String xor (String one, String two)
+	{
+\		int minLength= Math.min(one.length(), two.length());
+		String output= "";
+		
+		for (int i= 0; i< minLength; i++)
+			output= output + (one.charAt(i) ^ two.charAt(i));
+
+		return output;
+	}
+}
